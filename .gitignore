@@ -1,0 +1,47 @@
+# Byte-compiled / optimized / DLL files
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Installed packages in development mode (editable)
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+bin/
+develop-eggs/
+
+# Logs and databases
+*.log
+*.sqlite3
+__debugger__
+
+# Pytest cache
+.pytest_cache/
+
+# IPython notebook checkpoints
+.ipynb_checkpoints
+
+# Environment variables file
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# VS Code specific files
+.vscode/
+*.code-workspace
+
+# macOS specific files
+.DS_Store
+
+# Windows specific files
+Thumbs.db
