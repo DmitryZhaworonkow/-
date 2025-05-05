@@ -1,4 +1,5 @@
 import cv2
+import math
 import numpy as np
 from ultralytics import YOLO
 
@@ -8,7 +9,7 @@ TEXT_THICKNESS = 3
 MARKER_SIZE = 10
 LINE_THICKNESS = 2
 MAX_DISPLAY_HEIGHT = 1080
-SQUARE_SIZE = 2.9  # см, размер клетки шахматной доски (проверь реальный размер!)
+SQUARE_SIZE = 2.9  # см, размер клетки шахматной доски (проверь реальный!)
 YOLO_CUP_CLASS_ID = 41  # класс "cup" в YOLOv8
 
 # --- Загрузка изображения ---
@@ -52,9 +53,7 @@ def find_chessboard(gray, chessboard_size=(7, 6), mask=None):
     flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_FAST_CHECK + cv2.CALIB_CB_NORMALIZE_IMAGE
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
-    # Здесь исправленный вызов — mask передаётся позиционно
     found, corners = cv2.findChessboardCorners(gray, chessboard_size, mask, flags)
-
     if not found:
         return None
 
@@ -67,7 +66,6 @@ def find_chessboard(gray, chessboard_size=(7, 6), mask=None):
         return None
 
     Rmat = cv2.Rodrigues(rvec)[0]
-    print(f"Board tvec: {tvec.flatten()}")
     return {
         'found': True,
         'objp': objp,
@@ -127,32 +125,29 @@ for result in results:
             cv2.putText(image, f"({O[0]}, {O[1]})", (O[0], O[1] - 80),
                         cv2.FONT_HERSHEY_SIMPLEX, FONT_SCALE, COLORS['object'], TEXT_THICKNESS)
 
-# --- Триангуляция кружки по двум доскам ---
-if len(boards) >= 2 and O is not None:
+# --- Расчёт расстояния до кружки через угол и Z доски ---
+if len(boards) >= 1 and O is not None:
     b1 = boards[0]['data']
-    b2 = boards[1]['data']
+    tvec1 = b1['tvec']
 
-    # Проекционные матрицы
-    P1 = camera_matrix @ np.hstack((b1['Rmat'], b1['tvec']))
-    P2 = camera_matrix @ np.hstack((b2['Rmat'], b2['tvec']))
+    # Оптический центр камеры
+    K_x, K_y = camera_params['cx'], camera_params['cy']
+    O_x, O_y = O
 
-    point1 = np.array([[O[0], O[1]]], dtype=np.float32)
-    point2 = point1.copy()
+    # Угол между направлением на кружку и оптической осью
+    angle_x = math.atan((O_x - K_x) / camera_params['fx'])
+    angle_y = math.atan((O_y - K_y) / camera_params['fy'])
 
-    # Преобразование точек в формат OpenCV для триангуляции
-    point1_input = point1.reshape(-1, 1, 2)
-    point2_input = point2.reshape(-1, 1, 2)
+    # Расстояние до доски по Z
+    z_distance = abs(tvec1[2][0])  # см
 
-    points_4d = cv2.triangulatePoints(P1, P2, point1_input, point2_input)
-    points_3d = points_4d[:3] / points_4d[3]
+    # Расстояние до кружки вдоль луча зрения
+    distance_to_cup = z_distance / math.cos(math.sqrt(angle_x**2 + angle_y**2))
 
-    distance_to_cup = np.linalg.norm(points_3d)
-
-    print(f"3D координаты кружки: {points_3d.flatten()}")
-    print(f"Расстояние до кружки: {distance_to_cup:.2f} м")
+    print(f"Расстояние до кружки: {distance_to_cup:.2f} см")
 
     text_offset_x, text_offset_y = 50, 950
-    cv2.putText(image, f"Triangulated Cup Distance: {distance_to_cup*100:.1f} cm",
+    cv2.putText(image, f"Estimated Cup Distance: {distance_to_cup:.1f} cm",
                 (text_offset_x, text_offset_y),
                 cv2.FONT_HERSHEY_SIMPLEX, FONT_SCALE, COLORS['text'], TEXT_THICKNESS)
 
